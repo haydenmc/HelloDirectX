@@ -1,36 +1,46 @@
 #include "pch.h"
 #include "Renderer.h"
+#include "Window.h"
 
 namespace HelloTriangle
 {
 #pragma region Public
 	Renderer::Renderer(
-		RenderWindow* window,
+		Window* window,
 		bool useWarpDevice
 	) : 
 		m_window(window),
 		m_useWarpDevice(useWarpDevice)
 	{ }
 
-	void Renderer::OnInit()
+	void Renderer::Initialize()
 	{
 		LoadPipeline();
 		LoadAssets();
 	}
 
-	void Renderer::OnUpdate()
+	void Renderer::Render()
 	{
+		// Record all the commands we need to render the scene into the command list.
+		PopulateCommandList();
 
-	}
+		// Execute the command list.
+		ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+		m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
-	void Renderer::OnRender()
-	{
+		// Present the frame.
+		ThrowIfFailed(m_swapChain->Present(1, 0));
 
+		WaitForPreviousFrame();
 	}
 
 	void Renderer::OnDestroy()
 	{
+		// Ensure that the GPU is no longer referencing resources that are about to be
+		// cleaned up by the destructor.
+		WaitForPreviousFrame();
 
+		CloseHandle(m_fenceEvent);
 	}
 #pragma endregion Public
 
@@ -137,17 +147,109 @@ namespace HelloTriangle
 
 	void Renderer::LoadAssets()
 	{
+		// Create the command list
+		ThrowIfFailed(m_d3dDevice->CreateCommandList(
+			0,
+			D3D12_COMMAND_LIST_TYPE_DIRECT,
+			m_commandAllocator.Get(),
+			nullptr,
+			IID_PPV_ARGS(&m_commandList)
+		));
+
+		// Command lists are created in the recording state, but there is nothing
+		// to record yet. The main loop expects it to be closed, so close it now.
+		ThrowIfFailed(m_commandList->Close());
+
+		// Create synchronization objects
+		{
+			ThrowIfFailed(m_d3dDevice->CreateFence(
+				0,
+				D3D12_FENCE_FLAG_NONE,
+				IID_PPV_ARGS(&m_fence)
+			));
+			m_fenceValue = 1;
+
+			// Create an event handle for frame synchronization
+			m_fenceEvent = CreateEventW(nullptr, false, false, nullptr);
+			if (m_fenceEvent == nullptr)
+			{
+				ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
+			}
+		}
 
 	}
 
 	void Renderer::PopulateCommandList()
 	{
+		// Command list allocators can only be reset when the associated 
+		// command lists have finished execution on the GPU; apps should use 
+		// fences to determine GPU execution progress.
+		ThrowIfFailed(m_commandAllocator->Reset());
 
+		// However, when ExecuteCommandList() is called on a particular command 
+		// list, that command list can then be reset at any time and must be before 
+		// re-recording.
+		ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
+
+		// Indicate that the back buffer will be used as a render target.
+		CD3DX12_RESOURCE_BARRIER renderTransition{
+			CD3DX12_RESOURCE_BARRIER::Transition(
+				m_renderTargets[m_frameIndex].Get(),
+				D3D12_RESOURCE_STATE_PRESENT,
+				D3D12_RESOURCE_STATE_RENDER_TARGET
+			)
+		};
+		m_commandList->ResourceBarrier(
+			1,
+			&renderTransition
+		);
+
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle{
+			m_rtvHeap->GetCPUDescriptorHandleForHeapStart(),
+			static_cast<int32_t>(m_frameIndex),
+			m_rtvDescriptorSize
+		};
+
+		// Record commands.
+		const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+		m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+		// Indicate that the back buffer will now be used to present.
+		CD3DX12_RESOURCE_BARRIER presentTransition{
+			CD3DX12_RESOURCE_BARRIER::Transition(
+				m_renderTargets[m_frameIndex].Get(),
+				D3D12_RESOURCE_STATE_RENDER_TARGET,
+				D3D12_RESOURCE_STATE_PRESENT
+			)
+		};
+		m_commandList->ResourceBarrier(
+			1,
+			&presentTransition
+		);
+
+		ThrowIfFailed(m_commandList->Close());
 	}
 
 	void Renderer::WaitForPreviousFrame()
 	{
+		// WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
+		// This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
+		// sample illustrates how to use fences for efficient resource usage and to
+		// maximize GPU utilization.
 
+		// Signal and increment the fence value.
+		const UINT64 fence = m_fenceValue;
+		ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence));
+		m_fenceValue++;
+
+		// Wait until the previous frame is finished.
+		if (m_fence->GetCompletedValue() < fence)
+		{
+			ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
+			WaitForSingleObject(m_fenceEvent, INFINITE);
+		}
+
+		m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 	}
 	
 	void Renderer::GetHardwareAdapter(

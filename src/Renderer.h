@@ -1,23 +1,23 @@
 #pragma once
 #include "pch.h"
-#include "RenderWindow.h"
 #include <memory>
 
 namespace HelloTriangle
 {
+	class Window;
+
 	class Renderer
 	{
 	public:
-		Renderer(RenderWindow* window, bool useWarpDevice = false);
+		Renderer(Window* window, bool useWarpDevice = false);
 
-		void OnInit();
-		void OnUpdate();
-		void OnRender();
+		void Initialize();
+		void Render();
 		void OnDestroy();
 
 	private:
 		static constexpr int NUM_FRAMES = 2;
-		RenderWindow* const m_window;
+		Window* const m_window;
 		const bool m_useWarpDevice;
 
 		// DX Pipeline

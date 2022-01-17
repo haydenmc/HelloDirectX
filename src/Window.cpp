@@ -1,11 +1,10 @@
 #include "pch.h"
-#include "RenderWindow.h"
-#include "Simulation.h"
+#include "Window.h"
 
 namespace HelloTriangle
 {
 #pragma region Public
-	RenderWindow::RenderWindow(
+	Window::Window(
 		HINSTANCE hInstance,
 		std::string title,
 		std::string windowClass,
@@ -21,13 +20,8 @@ namespace HelloTriangle
 		RegisterWindowClass();
 	}
 
-	void RenderWindow::Initialize(
-		Simulation* simulation,
-		IInputSink* inputSink)
+	void Window::Initialize()
 	{
-		m_simulation = simulation;
-		m_inputSink = inputSink;
-
 		CreateHwnd();
 		if (m_handle == nullptr)
 		{
@@ -39,22 +33,22 @@ namespace HelloTriangle
 		SetFocus(m_handle);
 	}
 
-	uint32_t RenderWindow::GetWidth()
+	uint32_t Window::GetWidth()
 	{
 		return m_width;
 	}
 
-	uint32_t RenderWindow::GetHeight()
+	uint32_t Window::GetHeight()
 	{
 		return m_height;
 	}
 
-	HWND RenderWindow::GetHwnd()
+	HWND Window::GetHwnd()
 	{
 		return m_handle;
 	}
 
-	MessagePumpResult RenderWindow::PumpMessages()
+	MessagePumpResult Window::PumpMessages()
 	{
 		MSG msg{ 0 };
 		if (PeekMessageW(&msg, m_handle, 0, 0, PM_REMOVE))
@@ -76,12 +70,17 @@ namespace HelloTriangle
 
 		return MessagePumpResult::Continue;
 	}
+
+	void Window::GetKeyState()
+	{
+		// TODO
+	}
 #pragma endregion Public
 
 #pragma region Private
-	void RenderWindow::RegisterWindowClass()
+	void Window::RegisterWindowClass()
 	{
-		spdlog::debug("RenderWindow: Registering Window Class...");
+		spdlog::debug("Window: Registering Window Class...");
 		std::wstring className{ m_windowClass.begin(), m_windowClass.end() };
 		WNDCLASSEXW windowClass
 		{
@@ -101,15 +100,15 @@ namespace HelloTriangle
 		RegisterClassExW(&windowClass);
 	}
 
-	void RenderWindow::CreateHwnd()
+	void Window::CreateHwnd()
 	{
 		if (m_handle != nullptr)
 		{
-			spdlog::warn("RenderWindow: CreateHwnd unexpectedly called multiple times.");
+			spdlog::warn("Window: CreateHwnd unexpectedly called multiple times.");
 			return;
 		}
 
-		spdlog::info("RenderWindow: Creating new HWND");
+		spdlog::info("Window: Creating new HWND");
 		std::wstring windowClass{ m_windowClass.begin(), m_windowClass.end() };
 		std::wstring title{ m_title.begin(), m_title.end() };
 		m_handle = CreateWindowExW(
@@ -128,21 +127,21 @@ namespace HelloTriangle
 		);
 	}
 
-	LRESULT CALLBACK RenderWindow::WindowProc(
+	LRESULT CALLBACK Window::WindowProc(
 		HWND hwnd,
 		UINT msg,
 		WPARAM wParam,
 		LPARAM lParam
 	)
 	{
-		// Maintain reference to RenderWindow instance
-		RenderWindow* that{ nullptr };
+		// Maintain reference to Window instance
+		Window* that{ nullptr };
 
 		if (msg == WM_NCCREATE)
 		{
-			// If the window was just created, translate the RenderWindow pointer
+			// If the window was just created, translate the Window pointer
 			// from creation parameter to the hwnd userdata
-			that = static_cast<RenderWindow*>(
+			that = static_cast<Window*>(
 				reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
 			SetLastError(0);
 			if (!SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)))
@@ -155,8 +154,8 @@ namespace HelloTriangle
 		}
 		else
 		{
-			// Otherwise, extract the RenderWindow pointer from the hwnd userdata.
-			that = reinterpret_cast<RenderWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+			// Otherwise, extract the Window pointer from the hwnd userdata.
+			that = reinterpret_cast<Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 		}
 
 		if (that)
@@ -166,7 +165,7 @@ namespace HelloTriangle
 		return DefWindowProcW(hwnd, msg, wParam, lParam);
 	}
 
-	LRESULT CALLBACK RenderWindow::InstanceWindowProc(
+	LRESULT CALLBACK Window::InstanceWindowProc(
 		HWND hwnd,
 		UINT msg,
 		WPARAM wParam,
@@ -176,25 +175,14 @@ namespace HelloTriangle
 		switch (msg)
 		{
 		case WM_KEYDOWN:
-			if (m_inputSink)
-			{
-				m_inputSink->OnKeyDown(static_cast<uint8_t>(wParam));
-			}
+			// TODO
 			return 0;
 
 		case WM_KEYUP:
-			if (m_inputSink)
-			{
-				m_inputSink->OnKeyUp(static_cast<uint8_t>(wParam));
-			}
+			// TODO
 			return 0;
 
 		case WM_PAINT:
-			if (m_simulation)
-			{
-				m_simulation->OnUpdate();
-				m_simulation->OnRender();
-			}
 			return 0;
 
 		case WM_DESTROY:
