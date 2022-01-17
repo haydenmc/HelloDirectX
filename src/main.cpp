@@ -32,7 +32,7 @@ int wmain(int argc, wchar_t* argv[])
 		window->Initialize();
 
 		spdlog::info("Main: Creating renderer...");
-		renderer = std::make_unique<HelloTriangle::Renderer>(window.get());
+		renderer = std::make_unique<HelloTriangle::Renderer>(window.get(), 800, 600);
 		spdlog::info("Main: Initializing renderer...");
 		renderer->Initialize();
 	}
